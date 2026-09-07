@@ -1,0 +1,33 @@
+{
+  "security": {
+    "ticker": "SAMPLE",
+    "market": "CN",
+    "currency": "CNY",
+    "name": ""
+  },
+  "as_of": "2026-09-07",
+  "data_cutoff": "2026-09-07",
+  "thesis": "",
+  "current_judgment": "信息不足",
+  "confidence": "低",
+  "next_event": "",
+  "financial_trends": [],
+  "scenario_values": {},
+  "market": {
+    "interval_return": -0.06821797931583129,
+    "annualized_volatility": 0.18210824875835424,
+    "max_drawdown": -0.21698488464598253,
+    "sharpe": -0.40362662298419383,
+    "beta": null,
+    "alpha": null,
+    "relative_return": null
+  },
+  "catalysts": [],
+  "risks": [],
+  "evidences": [],
+  "assumptions": [],
+  "data_gaps": [
+    "示例数据未包含财务字段，估值与财务趋势需补充后生成。"
+  ],
+  "disclaimer": "本报告仅用于教育、研究和信息整理，不构成投资建议、证券推荐或收益承诺。数据可能存在延迟、错误或口径差异，使用者应独立核实并自行承担决策风险。"
+}

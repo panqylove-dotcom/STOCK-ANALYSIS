@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>STOCK-ANALYSIS 只读仪表盘</title>
+<style>
+body { font-family: system-ui, sans-serif; margin: 2rem; color: #1a1a1a; }
+h1 { font-size: 1.4rem; }
+table { border-collapse: collapse; margin: .5rem 0 1.5rem; }
+th, td { border: 1px solid #ccc; padding: 4px 10px; text-align: left; font-size: .9rem; }
+th { background: #f2f2f2; }
+.neg { color: #b00020; }
+.pos { color: #0a7d32; }
+.note { color: #666; font-size: .8rem; }
+</style>
+</head>
+<body>
+<h1>STOCK-ANALYSIS 只读仪表盘</h1>
+<p class="note">仅用于研究与信息展示，不构成投资建议；无交易功能。</p>
+<table>
+<tr><th>标的</th><th>分析日期</th><th>判断</th><th>置信度</th><th>区间收益</th><th>年化波动</th><th>最大回撤</th><th>Sharpe</th></tr>
+<tr><td>CN:SAMPLE</td><td>2026-09-07</td><td>信息不足</td><td>低</td><td><span class="neg">-6.82%</span></td><td><span class="pos">18.21%</span></td><td><span class="neg">-21.70%</span></td><td>-0.40</td></tr>
+</table>
+</body>
+</html>

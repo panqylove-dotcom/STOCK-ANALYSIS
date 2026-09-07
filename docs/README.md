@@ -32,10 +32,13 @@
 │   ├── report-template.md
 │   ├── risk-and-disclaimer.md
 │   └── roadmap.md
-├── reports/           # 后续：按日期保存研究报告
-├── data/              # 后续：原始、清洗和派生数据
-├── src/               # 后续：采集与分析代码
-└── tests/             # 后续：计算、时间边界和回归测试
+├── src/stock_analysis/  # 可复用代码（配置、模型、指标、数据层、分析引擎、复盘、CLI）
+├── tests/               # 单元测试与边界测试
+├── data/                # raw / normalized / derived / output 分层
+├── reports/             # 按日期保存研究报告
+├── scripts/             # 数据生成等辅助脚本
+├── pyproject.toml       # 包配置与测试配置
+└── .github/workflows/   # CI
 ```
 
 ## 版本原则

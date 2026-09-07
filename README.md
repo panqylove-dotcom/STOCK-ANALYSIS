@@ -79,7 +79,55 @@ reports/YYYY-MM-DD-MARKET-TICKER.md
 
 ## 当前状态
 
-当前版本完成了项目文档体系和研究规范，尚未包含可执行的行情采集、量化计算、回测或交易模块。后续实现计划见 [路线图](docs/roadmap.md)。
+当前版本完成了项目文档体系和研究规范，并进入阶段 1（仓库工程化）：
+
+- 建立了 `src/`、`tests/`、`data/`、`reports/` 目录与可安装的 Python 包（`stock-analysis`）；
+- 提供了统一配置（`src/stock_analysis/config.py`）与计算版本策略；
+- 实现了与 `docs/data-and-metrics.md` 口径一致的派生指标计算（收益率、波动、回撤、同比、CAGR、利润率、FCF、净负债、P/E、Sharpe 等）及离线 CLI；
+- 内置确定性示例数据（`data/raw/sample_prices.csv`），测试完全离线可运行；
+- 配置了 GitHub Actions CI（Python 3.10–3.12）与 MIT 许可证。
+
+数据层（阶段 2 起步）：
+
+- `src/stock_analysis/data/`：CSV 加载器（含来源记录）、数据清洗（校验/去重/缺失值前向填充）、数据质量与新鲜度检查；
+- CLI 现在按「加载 → 校验 → 质量检查 → 计算指标」流程运行，质量不合格时返回非零退出码。
+
+分析引擎（阶段 3）：
+
+- `src/stock_analysis/analysis.py`：财务趋势（同比/CAGR）、DCF 多情景估值与敏感性分析、Beta/Alpha/相对收益、催化剂与风险清单、结构化 Markdown/JSON 报告；
+- CLI 子命令：`stock-analysis stats <csv>`（市场指标）与 `stock-analysis report <csv>`（生成报告，`--format json` 输出 JSON）。
+
+报告与复盘（阶段 4）：
+
+- `src/stock_analysis/review.py`：报告快照保存/恢复、财报更新前后差异比较、观察条件、复盘日志与偏差统计（平均偏差/平均绝对偏差/命中率）；
+- CLI 子命令：`stock-analysis diff <before.json> <after.json>`（财报差异）、`stock-analysis review <log.json>`（复盘摘要）、`stock-analysis report <csv> --save <path>`（保存快照）。
+
+扩展能力（阶段 5）：
+
+- `src/stock_analysis/markets.py`：多市场注册表（按市场设置年交易日数与时区）、带来源记录的汇率换算；
+- `src/stock_analysis/industry.py`：行业专用指标插件框架（内置 software/bank/retail/generic）；
+- `src/stock_analysis/portfolio.py`：组合权重、HHI 集中度、有效持仓数、最大单一暴露、Pearson 相关系数矩阵；
+- `src/stock_analysis/dashboard.py`：只读静态 HTML 仪表盘（无 JavaScript、无交易功能）；
+- `src/stock_analysis/audit.py`：JSONL 审计日志与数据许可检查（再分发/分析动作控制）；
+- CLI 子命令：`stock-analysis dashboard <snapshot.json>... --out dashboard.html`。
+
+在线行情源（阶段 2 补完）：
+
+- `src/stock_analysis/data/fetchers.py`：akshare A 股日线适配器（可选依赖 `pip install "stock-analysis[akshare]"`，默认前复权，含重试与指数退避、来源与许可登记）；
+- CLI 子命令：`stock-analysis fetch 600000 --start YYYY-MM-DD --end YYYY-MM-DD --out data/raw/x.csv`；
+- 法定披露来源（交易所/巨潮等）仍待接入；第三方行情数据不能替代法定披露核验。
+
+运行方式：
+
+```bash
+pip install -e ".[dev]"
+python -m pytest
+python -m stock_analysis.cli stats data/raw/sample_prices.csv --ticker SAMPLE
+python -m stock_analysis.cli report data/raw/sample_prices.csv --ticker SAMPLE
+python -m stock_analysis.cli review data/review_sample.json
+```
+
+尚未包含真实行情采集、财务数据接入、回测或交易模块。后续实现计划见 [路线图](docs/roadmap.md)。
 
 ## 免责声明
 
@@ -87,4 +135,4 @@ reports/YYYY-MM-DD-MARKET-TICKER.md
 
 ## License
 
-暂未指定开源许可证。在许可证明确前，默认保留所有权利。
+本项目采用 [MIT License](LICENSE)。
