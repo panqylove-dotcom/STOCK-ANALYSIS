@@ -286,6 +286,57 @@ def _cmd_portfolio(args) -> int:
     return 0
 
 
+def _cmd_disclose(args) -> int:
+    """法定披露：公告元数据检索（cninfo/sse/szse）或本地核验登记。"""
+    from .data.disclosures import (
+        append_index,
+        fetch_announcements,
+        register_local_disclosure,
+    )
+
+    if args.disclose_action == "list":
+        try:
+            records = fetch_announcements(
+                args.source,
+                args.ticker,
+                start=date.fromisoformat(args.start),
+                end=date.fromisoformat(args.end),
+            )
+        except (ValueError, OSError) as exc:
+            print(f"披露检索失败: {exc}", file=sys.stderr)
+            return 1
+        if not records:
+            print("区间内未检索到公告。")
+            return 0
+        print("| 披露日期 | 标题 | 链接 |")
+        print("| --- | --- | --- |")
+        for r in records:
+            print(f"| {r.disclosed_on} | {r.title} | {r.url or '-'} |")
+        print(
+            f"来源: {args.source}（{len(records)} 条）；公告原文需人工核验",
+            file=sys.stderr,
+        )
+        return 0
+
+    # register：手动下载的公告文件 -> SHA-256 + JSONL 索引
+    try:
+        record = register_local_disclosure(
+            Path(args.file),
+            ticker=args.ticker,
+            title=args.title,
+            disclosed_on=date.fromisoformat(args.disclosed_on),
+            url=args.url,
+        )
+    except (ValueError, OSError) as exc:
+        print(f"登记失败: {exc}", file=sys.stderr)
+        return 1
+    append_index(record, Path(args.index))
+    print(f"已登记: {record.title}（{record.disclosed_on}）")
+    print(f"SHA-256: {record.sha256}")
+    print(f"索引: {args.index}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="stock-analysis",
@@ -370,6 +421,34 @@ def main(argv: list[str] | None = None) -> int:
     p_port = sub.add_parser("portfolio", help="组合暴露与相关性分析（单币种）")
     p_port.add_argument("json", help="组合 JSON 路径")
     p_port.set_defaults(func=_cmd_portfolio)
+
+    p_disc = sub.add_parser(
+        "disclose", help="法定披露：公告检索（巨潮/上交所/深交所）或本地核验登记"
+    )
+    disc_sub = p_disc.add_subparsers(dest="disclose_action", required=True)
+    p_dlist = disc_sub.add_parser("list", help="检索区间内公告元数据")
+    p_dlist.add_argument("ticker", help="6 位股票代码，如 600000")
+    p_dlist.add_argument(
+        "--source", required=True, choices=["cninfo", "sse", "szse"],
+        help="披露来源：cninfo 巨潮 / sse 上交所 / szse 深交所",
+    )
+    p_dlist.add_argument("--start", required=True, help="开始日期 YYYY-MM-DD")
+    p_dlist.add_argument("--end", required=True, help="结束日期 YYYY-MM-DD")
+    p_dlist.set_defaults(func=_cmd_disclose)
+    p_dreg = disc_sub.add_parser("register", help="登记手动下载的公告文件")
+    p_dreg.add_argument("file", help="公告文件路径（如 PDF）")
+    p_dreg.add_argument("--ticker", required=True, help="证券代码")
+    p_dreg.add_argument("--title", required=True, help="公告标题")
+    p_dreg.add_argument(
+        "--disclosed-on", required=True, dest="disclosed_on",
+        help="披露日期 YYYY-MM-DD",
+    )
+    p_dreg.add_argument("--url", default=None, help="公告原文链接（可选）")
+    p_dreg.add_argument(
+        "--index", default="data/disclosures/index.jsonl",
+        help="JSONL 索引路径（默认 data/disclosures/index.jsonl）",
+    )
+    p_dreg.set_defaults(func=_cmd_disclose)
 
     args = parser.parse_args(argv)
     return args.func(args)

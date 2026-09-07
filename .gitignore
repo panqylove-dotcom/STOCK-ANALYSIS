@@ -31,3 +31,6 @@ data/raw/*.csv
 data/audit*.jsonl
 logs/
 
+# 法定披露原文与登记索引为运行产物（原文可能受第三方许可约束）
+data/disclosures/
+

@@ -119,7 +119,15 @@ reports/YYYY-MM-DD-MARKET-TICKER.md
 
 - `src/stock_analysis/data/fetchers.py`：akshare A 股日线适配器（可选依赖 `pip install "stock-analysis[akshare]"`，默认前复权，含重试与指数退避、来源与许可登记）；
 - CLI 子命令：`stock-analysis fetch 600000 --start YYYY-MM-DD --end YYYY-MM-DD --out data/raw/x.csv`；
-- 法定披露来源（交易所/巨潮等）仍待接入；第三方行情数据不能替代法定披露核验。
+
+法定披露来源（阶段 2 收尾）：
+
+- `src/stock_analysis/data/disclosures.py`：A 股法定披露适配器，覆盖巨潮资讯（cninfo，证监会指定披露平台）、上交所（sse）、深交所（szse）公告检索；零第三方依赖（标准库 urllib），全部网络调用可注入 mock，测试完全离线；
+- 本地核验登记：`register_local_disclosure` 对手动下载的公告文件计算 SHA-256 并追加到 JSONL 索引（`data/disclosures/` 为运行产物，不入库）；
+- CLI 子命令：
+  - `stock-analysis disclose list 600000 --source cninfo|sse|szse --start YYYY-MM-DD --end YYYY-MM-DD`（公告元数据检索）；
+  - `stock-analysis disclose register 公告.pdf --ticker 600000 --title "..." --disclosed-on YYYY-MM-DD`（本地核验登记）；
+- 接口为 best-effort 适配：官方页面/接口可能变更；第三方与检索数据不能替代公告原文人工核验。
 
 运行方式：
 
@@ -130,6 +138,7 @@ python -m stock_analysis.cli stats data/raw/sample_prices.csv --ticker SAMPLE
 python -m stock_analysis.cli report data/raw/sample_prices.csv --ticker SAMPLE
 python -m stock_analysis.cli review data/review_sample.json
 python -m stock_analysis.cli portfolio data/portfolio_sample.json
+python -m stock_analysis.cli disclose list 600000 --source cninfo --start 2026-08-01 --end 2026-09-05
 ```
 
 尚未包含真实行情采集、财务数据接入、回测或交易模块。后续实现计划见 [路线图](docs/roadmap.md)。
