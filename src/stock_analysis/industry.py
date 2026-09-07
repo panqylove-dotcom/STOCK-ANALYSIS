@@ -87,3 +87,31 @@ def _generic(m: Mapping[str, float]) -> dict[str, float]:
     """通用：无专用指标，原样返回空 dict。"""
     return {}
 
+
+@register_industry("semiconductor")
+def _semiconductor(m: Mapping[str, float]) -> dict[str, float]:
+    """半导体：研发强度与毛利率。"""
+    out: dict[str, float] = {}
+    if "r_and_d" in m and "revenue" in m and m["revenue"] != 0:
+        out["rd_intensity"] = m["r_and_d"] / m["revenue"]
+    if "gross_profit" in m and "revenue" in m and m["revenue"] != 0:
+        out["gross_margin"] = m["gross_profit"] / m["revenue"]
+    return out
+
+
+@register_industry("insurance")
+def _insurance(m: Mapping[str, float]) -> dict[str, float]:
+    """保险：综合成本率与投资收益率。"""
+    out: dict[str, float] = {}
+    if (
+        "claims" in m
+        and "expenses" in m
+        and "premiums" in m
+        and m["premiums"] != 0
+    ):
+        out["combined_ratio"] = (m["claims"] + m["expenses"]) / m["premiums"]
+    if "investment_income" in m and "invested_assets" in m:
+        if m["invested_assets"] != 0:
+            out["investment_yield"] = m["investment_income"] / m["invested_assets"]
+    return out
+

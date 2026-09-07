@@ -11,7 +11,14 @@ from stock_analysis.industry import (
 
 def test_builtin_industries_registered():
     inds = available_industries()
-    assert {"software", "bank", "retail", "generic"} <= set(inds)
+    assert {
+        "software",
+        "bank",
+        "retail",
+        "generic",
+        "semiconductor",
+        "insurance",
+    } <= set(inds)
 
 
 def test_software_rule_of_40():
@@ -59,6 +66,30 @@ def test_retail_metrics():
 def test_missing_inputs_skip_metric():
     out = compute_industry_metrics("bank", {"net_profit": 10.0})
     assert out == {}
+
+
+def test_semiconductor_metrics():
+    out = compute_industry_metrics(
+        "semiconductor",
+        {"r_and_d": 30.0, "gross_profit": 80.0, "revenue": 100.0},
+    )
+    assert out["rd_intensity"] == pytest.approx(0.3)
+    assert out["gross_margin"] == pytest.approx(0.8)
+
+
+def test_insurance_metrics():
+    out = compute_industry_metrics(
+        "insurance",
+        {
+            "claims": 60.0,
+            "expenses": 25.0,
+            "premiums": 100.0,
+            "investment_income": 9.0,
+            "invested_assets": 300.0,
+        },
+    )
+    assert out["combined_ratio"] == pytest.approx(0.85)
+    assert out["investment_yield"] == pytest.approx(0.03)
 
 
 def test_unknown_industry_raises():

@@ -35,12 +35,18 @@ class PriceBar:
 
 @dataclass(frozen=True)
 class FinancialMetric:
-    """带来源与口径的财务指标。事实、计算、假设必须区分记录。"""
+    """带来源与口径的财务指标。事实、计算、假设必须区分记录。
+
+    standard 登记会计准则（如 PRC GAAP / US GAAP / IFRS）。
+    跨公司/跨期比较前必须统一准则（docs/data-and-metrics.md），
+    混用应用 analysis.assert_same_standards 拦截。
+    """
 
     metric: str
     period: str
     value: float | None
     currency: str
     source: str
+    standard: str = ""
     note: str = ""
 

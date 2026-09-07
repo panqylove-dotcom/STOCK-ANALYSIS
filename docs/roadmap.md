@@ -53,11 +53,11 @@
 
 ## 阶段 5：扩展能力
 
-- [x] 多市场、多币种（市场注册表 + 汇率记录；不同会计准则仍依赖人工口径对齐）
-- [x] 行业专用指标插件
-- [x] 组合暴露和相关性分析
+- [x] 多市场、多币种（市场注册表 + 汇率记录；`FinancialMetric.standard` 登记会计准则，比较类计算前由 `assert_same_standards` / `assert_same_currencies` 拦截混用）
+- [x] 行业专用指标插件（software/bank/retail/semiconductor/insurance/generic）
+- [x] 组合暴露和相关性分析（`portfolio` 子命令，单币种守卫）
 - [x] 可视化与只读仪表盘
-- [x] 权限、审计和更细粒度的数据许可控制（本地 JSONL 审计 + DataLicense 动作检查；多用户权限不在范围内）
+- [x] 权限、审计和更细粒度的数据许可控制（本地 JSONL 审计 + DataLicense 动作检查，`stats`/`report` 支持 `--audit`；多用户权限不在范围内）
 
 ## 非目标
 

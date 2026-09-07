@@ -23,7 +23,50 @@ from stock_analysis.analysis import (
     relative_return,
     scenario_dcf,
 )
-from stock_analysis.models import PriceBar, Security
+from stock_analysis.analysis import assert_same_standards, assert_same_currencies
+from stock_analysis.models import FinancialMetric, PriceBar, Security
+
+
+# ---------------------------------------------------------------- 口径守卫
+
+
+def test_assert_same_standards_ok():
+    ms = [
+        FinancialMetric("revenue", "2025", 100.0, "CNY", "s", standard="PRC GAAP"),
+        FinancialMetric("net_profit", "2025", 10.0, "CNY", "s", standard="PRC GAAP"),
+    ]
+    assert assert_same_standards(ms) == "PRC GAAP"
+
+
+def test_assert_same_standards_mixed_raises():
+    ms = [
+        FinancialMetric("revenue", "2025", 100.0, "CNY", "s", standard="PRC GAAP"),
+        FinancialMetric("revenue", "2025", 15.0, "USD", "s", standard="US GAAP"),
+    ]
+    with pytest.raises(ValueError, match="会计准则混用"):
+        assert_same_standards(ms)
+
+
+def test_assert_same_standards_unknown_ignored():
+    ms = [
+        FinancialMetric("revenue", "2025", 100.0, "CNY", "s", standard=""),
+        FinancialMetric("net_profit", "2025", 10.0, "CNY", "s", standard="IFRS"),
+    ]
+    assert assert_same_standards(ms) == "IFRS"
+
+
+def test_assert_same_currencies_mixed_raises():
+    ms = [
+        FinancialMetric("revenue", "2025", 100.0, "CNY", "s"),
+        FinancialMetric("revenue", "2025", 15.0, "USD", "s"),
+    ]
+    with pytest.raises(ValueError, match="币种混用"):
+        assert_same_currencies(ms)
+
+
+def test_assert_same_currencies_ok():
+    ms = [FinancialMetric("revenue", "2025", 100.0, "CNY", "s")]
+    assert assert_same_currencies(ms) == "CNY"
 
 
 # ---------------------------------------------------------------- 财务趋势

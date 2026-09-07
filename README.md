@@ -105,11 +105,15 @@ reports/YYYY-MM-DD-MARKET-TICKER.md
 扩展能力（阶段 5）：
 
 - `src/stock_analysis/markets.py`：多市场注册表（按市场设置年交易日数与时区）、带来源记录的汇率换算；
-- `src/stock_analysis/industry.py`：行业专用指标插件框架（内置 software/bank/retail/generic）；
+- `src/stock_analysis/industry.py`：行业专用指标插件框架（内置 software/bank/retail/semiconductor/insurance/generic）；
 - `src/stock_analysis/portfolio.py`：组合权重、HHI 集中度、有效持仓数、最大单一暴露、Pearson 相关系数矩阵；
 - `src/stock_analysis/dashboard.py`：只读静态 HTML 仪表盘（无 JavaScript、无交易功能）；
 - `src/stock_analysis/audit.py`：JSONL 审计日志与数据许可检查（再分发/分析动作控制）；
-- CLI 子命令：`stock-analysis dashboard <snapshot.json>... --out dashboard.html`。
+- `src/stock_analysis/models.py`：`FinancialMetric` 增加 `standard` 字段登记会计准则（如 CAS/IFRS/US GAAP）；`analysis.py` 提供 `assert_same_standards` / `assert_same_currencies`，在比较类计算前拦截会计准则或币种混用（CLI 违例退出码 4）；
+- CLI 子命令：
+  - `stock-analysis dashboard <snapshot.json>... --out dashboard.html`；
+  - `stock-analysis portfolio <portfolio.json>`：组合暴露与相关性分析（要求单币种，示例见 `data/portfolio_sample.json`）；
+  - `stock-analysis stats/report ... --audit <path.jsonl>`：将本次 analyze 动作追加写入审计 JSONL，数据许可不允许时拒绝并以退出码 4 结束。
 
 在线行情源（阶段 2 补完）：
 
@@ -125,6 +129,7 @@ python -m pytest
 python -m stock_analysis.cli stats data/raw/sample_prices.csv --ticker SAMPLE
 python -m stock_analysis.cli report data/raw/sample_prices.csv --ticker SAMPLE
 python -m stock_analysis.cli review data/review_sample.json
+python -m stock_analysis.cli portfolio data/portfolio_sample.json
 ```
 
 尚未包含真实行情采集、财务数据接入、回测或交易模块。后续实现计划见 [路线图](docs/roadmap.md)。

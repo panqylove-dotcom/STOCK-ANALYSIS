@@ -27,3 +27,20 @@ def test_financial_metric_allows_none_value():
     )
     assert m.value is None  # 缺失值保留为 None，不默认填零
 
+
+def test_financial_metric_standard_field():
+    m = FinancialMetric(
+        metric="revenue",
+        period="2025",
+        value=100.0,
+        currency="CNY",
+        source="annual report",
+        standard="PRC GAAP",
+    )
+    assert m.standard == "PRC GAAP"
+
+
+def test_financial_metric_standard_default_empty():
+    m = FinancialMetric("revenue", "2025", 1.0, "CNY", "src")
+    assert m.standard == ""
+

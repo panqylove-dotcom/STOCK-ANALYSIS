@@ -10,13 +10,42 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field, asdict
 from datetime import date
 from statistics import fmean
 from typing import Any
 
 from .config import Config
-from .models import PriceBar, Security
+from .models import FinancialMetric, PriceBar, Security
+
+
+# ---------------------------------------------------------------- 口径守卫
+
+
+def assert_same_standards(metrics: Sequence[FinancialMetric]) -> str:
+    """校验一组财务指标使用同一会计准则，返回该准则。
+
+    - 准则未登记（空字符串）不影响检查，但会被忽略；
+    - 发现两种及以上准则时抛错，阻止直接比较（docs/data-and-metrics.md：
+      对不同市场、币种、会计准则的数据比较前先完成标准化）。
+    """
+    known = {m.standard for m in metrics if m.standard}
+    if len(known) > 1:
+        raise ValueError(
+            f"会计准则混用，不能直接比较: {sorted(known)}；请先完成口径标准化"
+        )
+    return known.pop() if known else ""
+
+
+def assert_same_currencies(metrics: Sequence[FinancialMetric]) -> str:
+    """校验一组财务指标使用同一币种，返回该币种。"""
+    currencies = {m.currency for m in metrics if m.currency}
+    if len(currencies) > 1:
+        raise ValueError(
+            f"币种混用，不能直接比较: {sorted(currencies)}；请先用 markets.convert 换算"
+        )
+    return currencies.pop() if currencies else ""
 
 
 # ---------------------------------------------------------------- 财务趋势

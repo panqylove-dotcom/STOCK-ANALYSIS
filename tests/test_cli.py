@@ -278,3 +278,68 @@ def test_cli_dashboard_bad_snapshot(tmp_path):
 # 说明：fetch 子命令需要网络（akshare 在线拉取），遵循测试离线原则，
 # 不在此处做端到端测试；拉取逻辑由 tests/test_fetchers.py 的 mock 测试覆盖。
 
+
+def _run_cli(*argv, env_extra=None):
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(ROOT / "src")
+    return subprocess.run(
+        [sys.executable, "-m", "stock_analysis.cli", *argv],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        env=env,
+    )
+
+
+def test_cli_portfolio_with_returns(tmp_path):
+    data = {
+        "positions": [
+            {"ticker": "A", "market": "CN", "currency": "CNY", "market_value": 600},
+            {"ticker": "B", "market": "CN", "currency": "CNY", "market_value": 400},
+        ],
+        "returns": {
+            "A": [0.01, 0.02, -0.01, 0.03],
+            "B": [0.02, 0.01, 0.00, 0.01],
+        },
+    }
+    p = tmp_path / "portfolio.json"
+    import json as _json
+
+    p.write_text(_json.dumps(data), encoding="utf-8")
+    result = _run_cli("portfolio", str(p))
+    assert result.returncode == 0, result.stderr
+    assert "max_weight" in result.stdout
+    assert "| A | 60.00% |" in result.stdout
+    assert "A vs B" in result.stdout
+
+
+def test_cli_portfolio_currency_mismatch(tmp_path):
+    data = {
+        "positions": [
+            {"ticker": "A", "market": "CN", "currency": "CNY", "market_value": 600},
+            {"ticker": "B", "market": "NASDAQ", "currency": "USD", "market_value": 400},
+        ]
+    }
+    p = tmp_path / "portfolio.json"
+    import json as _json
+
+    p.write_text(_json.dumps(data), encoding="utf-8")
+    result = _run_cli("portfolio", str(p))
+    assert result.returncode == 1
+    assert "币种不一致" in result.stderr
+
+
+def test_cli_stats_audit_records_analyze(tmp_path):
+    audit = tmp_path / "audit.jsonl"
+    result = _run_cli(
+        "stats",
+        str(SAMPLE_CSV),
+        "--ticker",
+        "SAMPLE",
+        "--audit",
+        str(audit),
+    )
+    assert result.returncode == 0, result.stderr
+    assert audit.exists()
+    assert "analyze" in audit.read_text(encoding="utf-8")
+

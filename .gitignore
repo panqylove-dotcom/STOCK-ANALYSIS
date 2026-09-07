@@ -27,3 +27,7 @@ config.local.*
 data/raw/*.csv
 !data/raw/sample_prices.csv
 
+# 审计日志为运行产物
+data/audit*.jsonl
+logs/
+

@@ -9,10 +9,12 @@ from pathlib import Path
 import sys
 
 from .analysis import AnalysisReport, market_metrics_from_bars
+from .audit import DataLicense, LicenseViolation, perform_action
 from .config import Config
 from .dashboard import save_dashboard_html
 from .data.loader import CsvPriceLoader
 from .data.quality import run_quality_checks
+from .models import Security
 from .review import (
     compare_financials,
     load_report_snapshot,
@@ -26,6 +28,7 @@ from .metrics import (
     max_drawdown,
     returns_from_prices,
 )
+from .portfolio import Position, correlation_matrix, portfolio_exposure_summary, weights
 
 
 class _CmdError(Exception):
@@ -56,12 +59,35 @@ def _load(args):
     return result
 
 
+def _audit_analyze(args, source) -> None:
+    """若提供 --audit，则把本次 analyze 动作写入审计日志。
+
+    第三方来源默认 personal_use、禁止再分发；违例会被记录并拒绝。
+    """
+    if not getattr(args, "audit", None):
+        return
+    license = DataLicense(
+        source=source.name, personal_use=True, redistribution=False
+    )
+    perform_action(
+        license,
+        "analyze",
+        args.audit,
+        detail=f"license={source.license_name}",
+    )
+
+
 def _cmd_stats(args) -> int:
     try:
         result = _load(args)
     except _CmdError as exc:
         print(exc, file=sys.stderr)
         return exc.code
+    try:
+        _audit_analyze(args, result.source)
+    except LicenseViolation as exc:
+        print(f"许可检查未通过: {exc}", file=sys.stderr)
+        return 4
     bars = result.bars
     closes = [b.close for b in bars]
     dates = [b.date for b in bars]
@@ -88,6 +114,11 @@ def _cmd_report(args) -> int:
         return exc.code
     bars = result.bars
     metrics = market_metrics_from_bars(bars)
+    try:
+        _audit_analyze(args, result.source)
+    except LicenseViolation as exc:
+        print(f"许可检查未通过: {exc}", file=sys.stderr)
+        return 4
     report = AnalysisReport(
         security=result.security,
         as_of=date.today().isoformat(),
@@ -186,6 +217,75 @@ def _cmd_fetch(args) -> int:
     return 0
 
 
+def _cmd_portfolio(args) -> int:
+    """组合暴露与相关性分析（单币种；多币种需先换算统一）。
+
+    JSON 格式：{"positions":[{"ticker","market","currency","market_value"}...],
+               "returns": {ticker: [日收益率...]}（可选）}
+    """
+    try:
+        data = json.loads(Path(args.json).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"读取组合 JSON 失败: {exc}", file=sys.stderr)
+        return 1
+    try:
+        positions = [
+            Position(
+                security=Security(
+                    ticker=p["ticker"],
+                    market=p["market"],
+                    currency=p["currency"],
+                ),
+                market_value=float(p["market_value"]),
+            )
+            for p in data["positions"]
+        ]
+    except (KeyError, TypeError, ValueError) as exc:
+        print(f"组合字段错误: {exc}", file=sys.stderr)
+        return 1
+    currencies = {p.security.currency for p in positions}
+    if len(currencies) > 1:
+        print(
+            f"持仓币种不一致: {sorted(currencies)}；"
+            "请先用 markets.convert 换算为同一币种",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        summary = portfolio_exposure_summary(positions)
+    except ValueError as exc:
+        print(f"组合分析失败: {exc}", file=sys.stderr)
+        return 1
+    print(f"币种: {positions[0].security.currency}")
+    print("| 指标 | 值 |")
+    print("| --- | ---: |")
+    for key, value in summary.items():
+        v = f"{value:,.4f}" if isinstance(value, float) else value
+        print(f"| {key} | {v} |")
+    w = weights(positions)
+    print("")
+    print("| 持仓 | 权重 |")
+    print("| --- | ---: |")
+    for ticker in sorted(w):
+        print(f"| {ticker} | {w[ticker]:.2%} |")
+    returns = data.get("returns")
+    if returns:
+        try:
+            corr = correlation_matrix(
+                {k: [float(x) for x in v] for k, v in returns.items()}
+            )
+        except ValueError as exc:
+            print(f"相关性计算失败: {exc}", file=sys.stderr)
+            return 1
+        print("")
+        print("| 标的对 | 相关系数 |")
+        print("| --- | ---: |")
+        for (a, b), c in sorted(corr.items()):
+            if a != b:
+                print(f"| {a} vs {b} | {c:.3f} |")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="stock-analysis",
@@ -207,6 +307,9 @@ def main(argv: list[str] | None = None) -> int:
     p_stats.add_argument(
         "--skip-quality", action="store_true", help="跳过质量检查（仅用于调试）"
     )
+    p_stats.add_argument(
+        "--audit", metavar="PATH", default=None, help="将本次 analyze 动作记入审计 JSONL"
+    )
     p_stats.set_defaults(func=_cmd_stats)
 
     p_report = sub.add_parser("report", help="生成结构化研究报告（Markdown/JSON）")
@@ -222,6 +325,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_report.add_argument(
         "--skip-quality", action="store_true", help="跳过质量检查（仅用于调试）"
+    )
+    p_report.add_argument(
+        "--audit", metavar="PATH", default=None, help="将本次 analyze 动作记入审计 JSONL"
     )
     p_report.set_defaults(func=_cmd_report)
 
@@ -260,6 +366,10 @@ def main(argv: list[str] | None = None) -> int:
         "--out", required=True, help="输出 CSV 路径（raw 层，不覆盖已有文件则自行指定）"
     )
     p_fetch.set_defaults(func=_cmd_fetch)
+
+    p_port = sub.add_parser("portfolio", help="组合暴露与相关性分析（单币种）")
+    p_port.add_argument("json", help="组合 JSON 路径")
+    p_port.set_defaults(func=_cmd_portfolio)
 
     args = parser.parse_args(argv)
     return args.func(args)
