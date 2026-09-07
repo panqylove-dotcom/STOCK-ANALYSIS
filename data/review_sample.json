@@ -1,0 +1,14 @@
+[
+  {
+    "ticker": "SAMPLE",
+    "review_date": "2026-09-04",
+    "predicted_value": 110.0,
+    "actual_value": 100.0
+  },
+  {
+    "ticker": "SAMPLE",
+    "review_date": "2026-09-04",
+    "predicted_value": 95.0,
+    "actual_value": 100.0
+  }
+]

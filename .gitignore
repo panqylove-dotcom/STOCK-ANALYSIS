@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local config / secrets
+.env
+.env.*
+!.env.example
+config.local.*
+
+# 第三方行情原始数据（许可为 personal-use only，不得再分发/提交入库）
+data/raw/*.csv
+!data/raw/sample_prices.csv
+
