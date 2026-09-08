@@ -59,6 +59,16 @@
 - [x] 可视化与只读仪表盘
 - [x] 权限、审计和更细粒度的数据许可控制（本地 JSONL 审计 + DataLicense 动作检查，`stats`/`report` 支持 `--audit`；多用户权限不在范围内）
 
+## 用户侧易用性增强（阶段 5 之后追加）
+
+围绕「录入 → 报告 → 观察 → 复盘 → 披露跟踪」的研究闭环补齐手工入口：
+
+- [x] 财务工作簿 JSON 约定格式与校验（`financials.py`），`report --financials <path>` 自动填充财务趋势
+- [x] 观察条件结构化录入：`report --observe "描述|判据|阈值"`、`review add --obs`
+- [x] `watch` 只读跟踪清单：聚合快照与复盘日志中的观察条件，标注超期未复盘项
+- [x] `review summary` / `review add` 子命令化（旧位置参数用法保持兼容）
+- [x] `disclose check` 增量披露检查：以本地 JSONL 索引基线列出新公告，无记录时回看指定天数
+
 ## 非目标
 
 除非未来明确调整范围，本项目不计划：

@@ -267,13 +267,13 @@ def test_report_to_markdown_contains_sections():
     )
     md = report.to_markdown()
     assert "# 测试公司 (CN:TEST) 研究报告" in md
-    assert "## 3. 财务趋势" in md
+    assert "## 4. 财务趋势" in md
     assert "CAGR：20.0%" in md
-    assert "## 4. 估值情景" in md
-    assert "## 6. 催化剂" in md
-    assert "## 7. 风险与反证" in md
-    assert "## 10. 来源" in md
-    assert "## 11. 免责声明" in md
+    assert "## 5. 估值情景" in md
+    assert "## 7. 催化剂" in md
+    assert "## 8. 风险与反证" in md
+    assert "## 11. 来源" in md
+    assert "## 12. 免责声明" in md
 
 
 def test_report_to_markdown_renders_market_metrics():
@@ -291,7 +291,7 @@ def test_report_to_markdown_renders_market_metrics():
         ),
     )
     md = report.to_markdown()
-    assert "## 5. 市场与技术观察" in md
+    assert "## 6. 市场与技术观察" in md
     assert "| 区间收益率 | 20.00% |" in md
     assert "| 年化波动率 | 30.00% |" in md
     assert "| 最大回撤 | -10.00% |" in md

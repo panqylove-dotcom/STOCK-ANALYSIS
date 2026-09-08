@@ -110,7 +110,7 @@ def test_cli_report_markdown():
     )
     assert result.returncode == 0, result.stderr
     assert "研究报告" in result.stdout
-    assert "## 11. 免责声明" in result.stdout
+    assert "## 12. 免责声明" in result.stdout
 
 
 def test_cli_report_json():

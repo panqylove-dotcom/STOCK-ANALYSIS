@@ -276,6 +276,19 @@ class Evidence:
     supports: str = ""
 
 
+@dataclass(frozen=True)
+class Observation:
+    """可验证的观察条件：命题成立/失效的可观测信号。
+
+    状态取值：待观察 / 已触发 / 未触发 / 已失效。
+    """
+
+    description: str
+    condition: str
+    threshold: str = ""
+    status: str = "待观察"
+
+
 # ---------------------------------------------------------------- 报告
 
 
@@ -303,6 +316,7 @@ class AnalysisReport:
     current_judgment: str = "信息不足"
     confidence: str = "低"
     next_event: str = ""
+    observations: list[Observation] = field(default_factory=list)
     financial_trends: list[FinancialTrend] = field(default_factory=list)
     scenario_values: dict[str, float] = field(default_factory=dict)
     market: MarketMetrics = field(default_factory=MarketMetrics)
@@ -343,8 +357,18 @@ class AnalysisReport:
         lines.append("")
         lines.append(f"- **一句话投资命题：** {self.thesis or '（待填写）'}")
         lines.append("")
+        if self.observations:
+            lines.append("## 3. 观察条件")
+            lines.append("")
+            lines.append("| 观察条件 | 触发判据 | 阈值 | 状态 |")
+            lines.append("| --- | --- | --- | --- |")
+            for o in self.observations:
+                lines.append(
+                    f"| {o.description} | {o.condition} | {o.threshold or '—'} | {o.status} |"
+                )
+            lines.append("")
         if self.financial_trends:
-            lines.append("## 3. 财务趋势")
+            lines.append("## 4. 财务趋势")
             lines.append("")
             for t in self.financial_trends:
                 lines.append(f"### {t.metric}（{t.currency}）")
@@ -362,7 +386,7 @@ class AnalysisReport:
                 lines.append(f"CAGR：{cagr_s}")
                 lines.append("")
         if self.scenario_values:
-            lines.append("## 4. 估值情景（DCF 企业价值）")
+            lines.append("## 5. 估值情景（DCF 企业价值）")
             lines.append("")
             lines.append("| 情景 | 企业价值 |")
             lines.append("| --- | ---: |")
@@ -380,7 +404,7 @@ class AnalysisReport:
             ("相对收益", mm.relative_return),
         ]
         if any(v is not None for _, v in market_rows):
-            lines.append("## 5. 市场与技术观察")
+            lines.append("## 6. 市场与技术观察")
             lines.append("")
             lines.append("| 指标 | 值 |")
             lines.append("| --- | ---: |")
@@ -395,7 +419,7 @@ class AnalysisReport:
                     lines.append(f"| {name} | {v:.2f} |")
             lines.append("")
         if self.catalysts:
-            lines.append("## 6. 催化剂")
+            lines.append("## 7. 催化剂")
             lines.append("")
             lines.append("| 催化剂 | 预计时间 | 可观察结果 | 可能影响 |")
             lines.append("| --- | --- | --- | --- |")
@@ -406,7 +430,7 @@ class AnalysisReport:
                 )
             lines.append("")
         if self.risks:
-            lines.append("## 7. 风险与反证")
+            lines.append("## 8. 风险与反证")
             lines.append("")
             lines.append("| 风险 | 可能性 | 影响 | 先行指标 | 缓释因素 |")
             lines.append("| --- | --- | --- | --- | --- |")
@@ -417,19 +441,19 @@ class AnalysisReport:
                 )
             lines.append("")
         if self.assumptions:
-            lines.append("## 8. 假设")
+            lines.append("## 9. 假设")
             lines.append("")
             for a in self.assumptions:
                 lines.append(f"- {a}")
             lines.append("")
         if self.data_gaps:
-            lines.append("## 9. 数据缺口")
+            lines.append("## 10. 数据缺口")
             lines.append("")
             for g in self.data_gaps:
                 lines.append(f"- {g}")
             lines.append("")
         if self.evidences:
-            lines.append("## 10. 来源")
+            lines.append("## 11. 来源")
             lines.append("")
             lines.append("| 编号 | 来源与链接 | 发布日期 | 访问日期 | 支持内容 |")
             lines.append("| --- | --- | --- | --- | --- |")
@@ -439,7 +463,7 @@ class AnalysisReport:
                     f"{e.accessed_on} | {e.supports} |"
                 )
             lines.append("")
-        lines.append("## 11. 免责声明")
+        lines.append("## 12. 免责声明")
         lines.append("")
         lines.append(self.disclaimer)
         lines.append("")

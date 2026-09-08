@@ -127,7 +127,19 @@ reports/YYYY-MM-DD-MARKET-TICKER.md
 - CLI 子命令：
   - `stock-analysis disclose list 600000 --source cninfo|sse|szse --start YYYY-MM-DD --end YYYY-MM-DD`（公告元数据检索）；
   - `stock-analysis disclose register 公告.pdf --ticker 600000 --title "..." --disclosed-on YYYY-MM-DD`（本地核验登记）；
+  - `stock-analysis disclose check 600000 --source cninfo|sse|szse [--index PATH] [--days 30] [--today YYYY-MM-DD]`（增量检查：以索引内该标的最新披露日期为基线列出新公告；索引无记录时回看最近 N 天。只读，新公告需人工核验后用 register 登记）；
 - 接口为 best-effort 适配：官方页面/接口可能变更；第三方与检索数据不能替代公告原文人工核验。
+
+用户增强功能（研究闭环补强）：
+
+- `src/stock_analysis/financials.py`：财务工作簿 JSON 约定格式（`data/financials/<TICKER>.json`，含币种/来源/报告期格式校验与年报缺口提示），示例见 `data/financials/SAMPLE.json`；
+- `src/stock_analysis/watchlist.py`：从报告快照与复盘日志聚合观察条件，生成只读跟踪清单；
+- CLI 子命令：
+  - `stock-analysis report <csv> --financials <path>`：用财务工作簿自动填充报告的财务趋势（币种不一致时拒绝并退出码 1）；
+  - `stock-analysis report <csv> --observe "描述|触发判据|阈值"`（可多次）：随报告快照持久化观察条件；
+  - `stock-analysis watch <snapshot.json>... [--review-log log.json] [--stale-days 90] [--today YYYY-MM-DD]`：观察条件跟踪清单，长期未复盘的「待观察」项标注建议复盘；
+  - `stock-analysis review summary <log.json>`：复盘摘要（旧用法 `review <log.json>` 保持兼容）；
+  - `stock-analysis review add <log.json> --ticker ... --review-date YYYY-MM-DD [--obs "描述|判据|阈值"] [--predicted X --actual X] [--thesis ...] [--note ...]`：追加一条复盘记录（日志不存在则创建）。
 
 运行方式：
 
@@ -138,6 +150,9 @@ python -m stock_analysis.cli stats data/raw/sample_prices.csv --ticker SAMPLE
 python -m stock_analysis.cli report data/raw/sample_prices.csv --ticker SAMPLE
 python -m stock_analysis.cli review data/review_sample.json
 python -m stock_analysis.cli portfolio data/portfolio_sample.json
+python -m stock_analysis.cli report data/raw/sample_prices.csv --ticker SAMPLE --financials data/financials/SAMPLE.json
+python -m stock_analysis.cli watch reports/snapshot.json --review-log data/review_sample.json
+python -m stock_analysis.cli disclose check 600000 --source cninfo
 python -m stock_analysis.cli disclose list 600000 --source cninfo --start 2026-08-01 --end 2026-09-05
 ```
 

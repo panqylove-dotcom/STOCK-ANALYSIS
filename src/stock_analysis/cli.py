@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 import sys
 
@@ -112,6 +112,22 @@ def _cmd_report(args) -> int:
     except _CmdError as exc:
         print(exc, file=sys.stderr)
         return exc.code
+    workbook = None
+    if getattr(args, "financials", None):
+        from .financials import load_financials
+
+        try:
+            workbook = load_financials(args.financials)
+        except (OSError, ValueError) as exc:
+            print(f"读取财务数据文件失败: {exc}", file=sys.stderr)
+            return 1
+        if workbook.currency != result.security.currency:
+            print(
+                f"财务数据与行情币种不一致: {workbook.currency} vs "
+                f"{result.security.currency}；请先用 markets.convert 换算",
+                file=sys.stderr,
+            )
+            return 1
     bars = result.bars
     metrics = market_metrics_from_bars(bars)
     try:
@@ -119,12 +135,35 @@ def _cmd_report(args) -> int:
     except LicenseViolation as exc:
         print(f"许可检查未通过: {exc}", file=sys.stderr)
         return 4
+    assumptions: list[str] = []
+    if workbook is not None:
+        assumptions.append(
+            f"财务数据口径：币种={workbook.currency}，"
+            f"会计准则={workbook.standard or '未登记'}，来源={workbook.source}"
+        )
+        data_gaps = []
+        for metric in sorted(workbook.metrics):
+            gaps = workbook.annual_gaps(metric)
+            if gaps:
+                data_gaps.append(f"{metric} 缺少年报数据: {'/'.join(gaps)}")
+    else:
+        data_gaps = ["示例数据未包含财务字段，估值与财务趋势需补充后生成。"]
+    observations: list = []
+    if getattr(args, "observe", None):
+        try:
+            observations = _parse_observe(args.observe)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
     report = AnalysisReport(
         security=result.security,
         as_of=date.today().isoformat(),
         data_cutoff=result.source.accessed_at,
         market=metrics,
-        data_gaps=["示例数据未包含财务字段，估值与财务趋势需补充后生成。"],
+        financial_trends=workbook.to_trends() if workbook else [],
+        observations=observations,
+        assumptions=assumptions,
+        data_gaps=data_gaps,
     )
     if args.save:
         save_report_snapshot(report, args.save)
@@ -172,6 +211,44 @@ def _cmd_review(args) -> int:
     return 0
 
 
+def _cmd_review_add(args) -> int:
+    """向复盘日志追加一条复盘记录（自动计算偏差）。"""
+    from .review import ReviewEntry, save_review_log
+
+    try:
+        date.fromisoformat(args.review_date)
+    except ValueError:
+        print(f"--review-date 日期格式错误: {args.review_date}", file=sys.stderr)
+        return 1
+    try:
+        observations = _parse_observe(args.obs or [])
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    entry = ReviewEntry(
+        ticker=args.ticker,
+        review_date=args.review_date,
+        thesis=args.thesis or "",
+        observation_conditions=observations,
+        predicted_value=args.predicted,
+        actual_value=args.actual,
+        notes=args.note or "",
+    )
+    bias = entry.compute_bias()
+    log_path = Path(args.json)
+    try:
+        entries = load_review_log(log_path) if log_path.exists() else []
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        print(f"读取复盘日志失败: {exc}", file=sys.stderr)
+        return 1
+    entries.append(entry)
+    save_review_log(entries, log_path)
+    bias_s = f"{bias:+.2%}" if bias is not None else "—"
+    print(f"已追加复盘: {entry.ticker} @ {entry.review_date}（偏差 {bias_s}）")
+    print(f"日志: {log_path}（共 {len(entries)} 条）")
+    return 0
+
+
 def _cmd_dashboard(args) -> int:
     """从报告快照 JSON 生成只读 HTML 仪表盘。"""
     reports = []
@@ -215,6 +292,54 @@ def _cmd_fetch(args) -> int:
     print(f"已保存 {len(result.bars)} 条日线 -> {out}")
     print(f"来源: {result.source.name}（{result.source.license_name}）", file=sys.stderr)
     return 0
+
+
+def _cmd_watch(args) -> int:
+    """聚合观察条件（只读；不修改任何文件）。"""
+    from .review import load_report_snapshot, load_review_log
+    from .watchlist import collect_watch_items, watch_markdown
+
+    reports = []
+    for item in args.snapshots:
+        try:
+            reports.append(load_report_snapshot(item))
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            print(f"读取快照失败 {item}: {exc}", file=sys.stderr)
+            return 1
+    entries = []
+    if args.review_log:
+        try:
+            entries = load_review_log(args.review_log)
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            print(f"读取复盘日志失败 {args.review_log}: {exc}", file=sys.stderr)
+            return 1
+    try:
+        today = date.fromisoformat(args.today) if args.today else date.today()
+    except ValueError:
+        print(f"--today 日期格式错误: {args.today}", file=sys.stderr)
+        return 1
+    items = collect_watch_items(reports, entries)
+    print(watch_markdown(items, today=today, stale_days=args.stale_days))
+    return 0
+
+
+def _parse_observe(specs: list[str]) -> list:
+    """--observe "描述|触发判据|阈值"（后两段可省略）。"""
+    from .analysis import Observation
+
+    out = []
+    for spec in specs:
+        parts = [p.strip() for p in spec.split("|")]
+        if not parts or not parts[0] or len(parts) > 3:
+            raise ValueError(f"--observe 格式错误: {spec!r}（应为 描述|判据|阈值）")
+        out.append(
+            Observation(
+                description=parts[0],
+                condition=parts[1] if len(parts) > 1 else parts[0],
+                threshold=parts[2] if len(parts) > 2 else "",
+            )
+        )
+    return out
 
 
 def _cmd_portfolio(args) -> int:
@@ -291,6 +416,7 @@ def _cmd_disclose(args) -> int:
     from .data.disclosures import (
         append_index,
         fetch_announcements,
+        load_index,
         register_local_disclosure,
     )
 
@@ -318,6 +444,9 @@ def _cmd_disclose(args) -> int:
         )
         return 0
 
+    if args.disclose_action == "check":
+        return _disclose_check(args)
+
     # register：手动下载的公告文件 -> SHA-256 + JSONL 索引
     try:
         record = register_local_disclosure(
@@ -337,7 +466,67 @@ def _cmd_disclose(args) -> int:
     return 0
 
 
+def _disclose_check(args) -> int:
+    """增量检查：以本地索引中该标的最新披露日期为基线，列出其后的新公告。
+
+    索引无该标的记录时回看最近 --days 天；结果需人工核验后用 register 登记。
+    """
+    from .data.disclosures import fetch_announcements, load_index
+
+    try:
+        index_records = load_index(Path(args.index))
+    except (ValueError, OSError) as exc:
+        print(f"读取披露索引失败: {exc}", file=sys.stderr)
+        return 1
+    known = [r for r in index_records if r.ticker == args.ticker]
+    try:
+        today = date.fromisoformat(args.today) if args.today else date.today()
+    except ValueError:
+        print(f"日期格式错误: {args.today}（应为 YYYY-MM-DD）", file=sys.stderr)
+        return 1
+    if known:
+        start = max(r.disclosed_on for r in known)
+        print(
+            f"基线: 索引内 {args.ticker} 最新披露 {start}（已登记 {len(known)} 条）",
+            file=sys.stderr,
+        )
+    else:
+        start = today - timedelta(days=args.days)
+        print(
+            f"索引内无 {args.ticker} 记录，回看最近 {args.days} 天（{start} 起）",
+            file=sys.stderr,
+        )
+    try:
+        records = fetch_announcements(args.source, args.ticker, start=start, end=today)
+    except (ValueError, OSError) as exc:
+        print(f"披露增量检查失败: {exc}", file=sys.stderr)
+        return 1
+    seen = {(r.title, r.disclosed_on) for r in known}
+    fresh = [r for r in records if (r.title, r.disclosed_on) not in seen]
+    if not fresh:
+        print("未发现新公告。")
+        return 0
+    print("| 披露日期 | 标题 | 链接 |")
+    print("| --- | --- | --- |")
+    for r in fresh:
+        print(f"| {r.disclosed_on} | {r.title} | {r.url or '-'} |")
+    print(
+        f"新公告 {len(fresh)} 条；原文需人工核验，确认后可用 disclose register 登记",
+        file=sys.stderr,
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # 兼容旧用法：`review <log.json>` 等价于 `review summary <log.json>`
+    if (
+        argv[:1] == ["review"]
+        and argv[1:2]
+        and argv[1] not in ("summary", "add")
+        and not argv[1].startswith("-")
+    ):
+        argv = ["review", "summary", *argv[1:]]
     parser = argparse.ArgumentParser(
         prog="stock-analysis",
         description="加载本地 CSV，做质量检查并计算指标或生成报告（离线）。",
@@ -380,6 +569,14 @@ def main(argv: list[str] | None = None) -> int:
     p_report.add_argument(
         "--audit", metavar="PATH", default=None, help="将本次 analyze 动作记入审计 JSONL"
     )
+    p_report.add_argument(
+        "--financials", metavar="PATH", default=None,
+        help="财务工作簿 JSON（data/financials/<TICKER>.json 约定格式），自动填充财务趋势",
+    )
+    p_report.add_argument(
+        "--observe", action="append", default=None, metavar="SPEC",
+        help='登记观察条件："描述|触发判据|阈值"（可多次）',
+    )
     p_report.set_defaults(func=_cmd_report)
 
     p_diff = sub.add_parser("diff", help="比较财报更新前后差异")
@@ -392,9 +589,32 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_diff.set_defaults(func=_cmd_diff)
 
-    p_review = sub.add_parser("review", help="生成复盘摘要（偏差统计）")
-    p_review.add_argument("json", help="复盘日志 JSON 路径")
-    p_review.set_defaults(func=_cmd_review)
+    p_review = sub.add_parser("review", help="复盘：摘要统计（summary）或追加记录（add）")
+    review_sub = p_review.add_subparsers(dest="review_action", required=True)
+    p_rsum = review_sub.add_parser("summary", help="生成复盘摘要（偏差统计）")
+    p_rsum.add_argument("json", help="复盘日志 JSON 路径")
+    p_rsum.set_defaults(func=_cmd_review)
+    p_radd = review_sub.add_parser("add", help="追加一条复盘记录")
+    p_radd.add_argument("json", help="复盘日志 JSON 路径（不存在则创建）")
+    p_radd.add_argument("--ticker", required=True, help="证券代码")
+    p_radd.add_argument(
+        "--review-date", dest="review_date", required=True,
+        help="复盘日期 YYYY-MM-DD",
+    )
+    p_radd.add_argument("--thesis", default="", help="研究命题（可选）")
+    p_radd.add_argument(
+        "--predicted", type=float, default=None, metavar="X",
+        help="预测值（可选）",
+    )
+    p_radd.add_argument(
+        "--actual", type=float, default=None, metavar="X", help="实际值（可选）",
+    )
+    p_radd.add_argument(
+        "--obs", action="append", default=None, metavar="SPEC",
+        help='观察条件："描述|触发判据|阈值"（可多次）',
+    )
+    p_radd.add_argument("--note", default="", help="备注（可选）")
+    p_radd.set_defaults(func=_cmd_review_add)
 
     p_dash = sub.add_parser("dashboard", help="从报告快照生成只读 HTML 仪表盘")
     p_dash.add_argument("snapshots", nargs="+", help="报告快照 JSON 路径（可多个）")
@@ -449,6 +669,46 @@ def main(argv: list[str] | None = None) -> int:
         help="JSONL 索引路径（默认 data/disclosures/index.jsonl）",
     )
     p_dreg.set_defaults(func=_cmd_disclose)
+
+    p_dcheck = disc_sub.add_parser(
+        "check", help="增量检查：以本地索引基线列出该标的之后的新公告（只读）"
+    )
+    p_dcheck.add_argument("ticker", help="6 位股票代码，如 600000")
+    p_dcheck.add_argument(
+        "--source", required=True, choices=["cninfo", "sse", "szse"],
+        help="披露来源：cninfo 巨潮 / sse 上交所 / szse 深交所",
+    )
+    p_dcheck.add_argument(
+        "--index", default="data/disclosures/index.jsonl",
+        help="JSONL 索引路径（默认 data/disclosures/index.jsonl）",
+    )
+    p_dcheck.add_argument(
+        "--days", type=int, default=30,
+        help="索引无该标的记录时的回看天数（默认 30）",
+    )
+    p_dcheck.add_argument(
+        "--today", default=None,
+        help="基准日期 YYYY-MM-DD（默认今天；用于可复现输出）",
+    )
+    p_dcheck.set_defaults(func=_cmd_disclose)
+
+    p_watch = sub.add_parser(
+        "watch", help="从报告快照/复盘日志聚合观察条件跟踪清单（只读）"
+    )
+    p_watch.add_argument("snapshots", nargs="+", help="报告快照 JSON 路径（可多个）")
+    p_watch.add_argument(
+        "--review-log", dest="review_log", default=None,
+        help="复盘日志 JSON（可选，一并聚合观察条件）",
+    )
+    p_watch.add_argument(
+        "--stale-days", dest="stale_days", type=int, default=90,
+        help="复盘周期天数，超过则标注建议复盘（默认 90）",
+    )
+    p_watch.add_argument(
+        "--today", default=None,
+        help="基准日期 YYYY-MM-DD（默认今天；用于可复现输出）",
+    )
+    p_watch.set_defaults(func=_cmd_watch)
 
     args = parser.parse_args(argv)
     return args.func(args)

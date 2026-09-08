@@ -20,6 +20,7 @@ from .analysis import (
     Evidence,
     FinancialTrend,
     MarketMetrics,
+    Observation,
     Risk,
 )
 from .models import Security
@@ -44,6 +45,9 @@ def load_report_snapshot(path: str | Path) -> AnalysisReport:
         data["market"] = MarketMetrics(**data["market"])
     data["financial_trends"] = [
         FinancialTrend(**t) for t in data.get("financial_trends", [])
+    ]
+    data["observations"] = [
+        Observation(**o) for o in data.get("observations", [])
     ]
     data["catalysts"] = [Catalyst(**c) for c in data.get("catalysts", [])]
     data["risks"] = [Risk(**r) for r in data.get("risks", [])]
@@ -111,17 +115,8 @@ def compare_financials(
     return FinancialDiff(security_ticker=ticker, period=period, diffs=diffs)
 
 
-# ---------------------------------------------------------------- 观察条件
-
-
-@dataclass(frozen=True)
-class Observation:
-    """可验证的观察条件：命题成立/失效的可观测信号。"""
-
-    description: str
-    condition: str
-    threshold: str = ""
-    status: str = "待观察"
+# ------------------------------------------------- 观察条件：见 analysis.Observation
+# （Observation 已上移到 analysis，报告快照与复盘日志共用同一数据结构）
 
 
 # ---------------------------------------------------------------- 复盘
@@ -180,7 +175,14 @@ def load_review_log(path: str | Path) -> list[ReviewEntry]:
     """加载复盘日志。"""
     p = Path(path)
     data = json.loads(p.read_text(encoding="utf-8"))
-    return [ReviewEntry(**item) for item in data]
+    entries = []
+    for item in data:
+        item["observation_conditions"] = [
+            Observation(**o) if isinstance(o, dict) else o
+            for o in item.get("observation_conditions", [])
+        ]
+        entries.append(ReviewEntry(**item))
+    return entries
 
 
 # ---------------------------------------------------------------- 方法稳定性

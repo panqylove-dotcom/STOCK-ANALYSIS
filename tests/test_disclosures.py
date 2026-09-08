@@ -311,3 +311,111 @@ def test_cli_disclose_list_network_error_returns_1(monkeypatch, capsys):
     ])
     assert code == 1
     assert "披露检索失败" in capsys.readouterr().err
+
+
+# --- CLI：disclose check（增量检查） ---------------------------------------
+
+def _write_index(tmp_path, lines):
+    idx = tmp_path / "idx.jsonl"
+    idx.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return idx
+
+
+def _check_http(calls, announcements):
+    def http(url, **kwargs):
+        calls.append((url, kwargs))
+        if url == ds.CNINFO_TOPSEARCH_URL:
+            return [{"code": "600000", "orgId": "gssh0600000"}]
+        return {
+            "totalAnnouncements": len(announcements),
+            "announcements": announcements,
+        }
+
+    return http
+
+
+def _ann(title, y, m, d):
+    return {
+        "announcementTitle": title,
+        "announcementTime": cn_ms(y, m, d),
+        "adjunctUrl": f"finalpage/{title}.PDF",
+    }
+
+
+def test_cli_disclose_check_lists_new_only(monkeypatch, tmp_path, capsys):
+    idx = _write_index(tmp_path, [
+        json.dumps({
+            "ticker": "600000", "source": "local", "title": "已登记公告",
+            "disclosed_on": "2026-08-01", "accessed_at": "2026-08-01T00:00:00+08:00",
+        }, ensure_ascii=False),
+    ])
+    calls = []
+    monkeypatch.setattr(ds, "_default_http", _check_http(calls, [
+        _ann("已登记公告", 2026, 8, 1),
+        _ann("新公告甲", 2026, 9, 1),
+    ]))
+    code = cli_main([
+        "disclose", "check", "600000", "--source", "cninfo",
+        "--index", str(idx), "--today", "2026-09-08",
+    ])
+    assert code == 0
+    captured = capsys.readouterr()
+    assert "新公告甲" in captured.out
+    assert "已登记公告" not in captured.out
+    assert "基线" in captured.err and "2026-08-01" in captured.err
+    # 检索起点应为索引基线日期
+    assert calls[1][1]["form"]["seDate"].startswith("2026-08-01~")
+
+
+def test_cli_disclose_check_lookback_without_records(monkeypatch, tmp_path, capsys):
+    idx = _write_index(tmp_path, [
+        json.dumps({
+            "ticker": "000001", "source": "local", "title": "他司公告",
+            "disclosed_on": "2020-01-01", "accessed_at": "2020-01-01T00:00:00+08:00",
+        }, ensure_ascii=False),
+    ])
+    calls = []
+    monkeypatch.setattr(ds, "_default_http", _check_http(calls, []))
+    code = cli_main([
+        "disclose", "check", "600000", "--source", "cninfo",
+        "--index", str(idx), "--today", "2026-09-08",
+    ])
+    assert code == 0
+    captured = capsys.readouterr()
+    assert "未发现新公告" in captured.out
+    assert "回看最近 30 天" in captured.err
+    assert calls[1][1]["form"]["seDate"] == "2026-08-09~2026-09-08"
+
+
+def test_cli_disclose_check_corrupt_index_returns_1(tmp_path, capsys):
+    idx = tmp_path / "idx.jsonl"
+    idx.write_text("{broken\n", encoding="utf-8")
+    code = cli_main([
+        "disclose", "check", "600000", "--source", "cninfo",
+        "--index", str(idx), "--today", "2026-09-08",
+    ])
+    assert code == 1
+    assert "读取披露索引失败" in capsys.readouterr().err
+
+
+def test_cli_disclose_check_bad_today_returns_1(tmp_path, capsys):
+    idx = tmp_path / "idx.jsonl"
+    code = cli_main([
+        "disclose", "check", "600000", "--source", "cninfo",
+        "--index", str(idx), "--today", "not-a-date",
+    ])
+    assert code == 1
+    assert "日期格式错误" in capsys.readouterr().err
+
+
+def test_cli_disclose_check_fetch_error_returns_1(monkeypatch, tmp_path, capsys):
+    def dead_http(url, **kwargs):
+        raise OSError("网络不可达")
+
+    monkeypatch.setattr(ds, "_default_http", dead_http)
+    code = cli_main([
+        "disclose", "check", "600000", "--source", "cninfo",
+        "--index", str(tmp_path / "absent.jsonl"), "--today", "2026-09-08",
+    ])
+    assert code == 1
+    assert "披露增量检查失败" in capsys.readouterr().err
