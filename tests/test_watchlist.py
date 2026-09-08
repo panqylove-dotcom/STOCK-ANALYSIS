@@ -163,3 +163,37 @@ def test_cli_report_bad_observe_spec_returns_1(capsys):
     ])
     assert code == 1
     assert "--observe 格式错误" in capsys.readouterr().err
+
+
+# --- watch JSON 输出与新鲜度 ------------------------------------------------
+
+def test_ticker_freshness_stale_only_with_pending():
+    from stock_analysis.watchlist import ticker_freshness
+
+    stale_pending = collect_watch_items([make_report(as_of="2026-01-01")], [])
+    fresh_done = collect_watch_items(
+        [make_report(ticker="600001", as_of="2026-01-01", status="已触发")], []
+    )
+    info = ticker_freshness(
+        stale_pending + fresh_done, today=date(2026, 9, 8), stale_days=90
+    )
+    assert info["600000"]["stale"] is True
+    assert info["600000"]["age_days"] == (date(2026, 9, 8) - date(2026, 1, 1)).days
+    # 超期但没有待观察条件 -> 不标 stale
+    assert info["600001"]["stale"] is False
+
+
+def test_cli_watch_json_format(tmp_path, capsys):
+    snap = tmp_path / "snap.json"
+    save_report_snapshot(make_report(as_of="2026-01-01"), snap)
+    code = cli_main([
+        "watch", str(snap), "--today", "2026-09-08", "--format", "json",
+    ])
+    assert code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema"] == "watchlist-v1"
+    assert payload["total"] == 1 and payload["pending_total"] == 1
+    assert payload["stale_tickers"] == ["600000"]
+    assert payload["tickers"]["600000"]["latest_as_of"] == "2026-01-01"
+    assert payload["items"][0]["description"] == "营收增速"
+    assert "不构成投资建议" in payload["disclaimer"]

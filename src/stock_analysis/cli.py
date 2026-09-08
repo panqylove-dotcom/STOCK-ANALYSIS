@@ -297,7 +297,7 @@ def _cmd_fetch(args) -> int:
 def _cmd_watch(args) -> int:
     """聚合观察条件（只读；不修改任何文件）。"""
     from .review import load_report_snapshot, load_review_log
-    from .watchlist import collect_watch_items, watch_markdown
+    from .watchlist import collect_watch_items, watch_json, watch_markdown
 
     reports = []
     for item in args.snapshots:
@@ -319,7 +319,11 @@ def _cmd_watch(args) -> int:
         print(f"--today 日期格式错误: {args.today}", file=sys.stderr)
         return 1
     items = collect_watch_items(reports, entries)
-    print(watch_markdown(items, today=today, stale_days=args.stale_days))
+    if args.format == "json":
+        payload = watch_json(items, today=today, stale_days=args.stale_days)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(watch_markdown(items, today=today, stale_days=args.stale_days))
     return 0
 
 
@@ -503,6 +507,10 @@ def _disclose_check(args) -> int:
         return 1
     seen = {(r.title, r.disclosed_on) for r in known}
     fresh = [r for r in records if (r.title, r.disclosed_on) not in seen]
+    if args.save:
+        code = _save_pending(fresh, args.save)
+        if code:
+            return code
     if not fresh:
         print("未发现新公告。")
         return 0
@@ -514,6 +522,23 @@ def _disclose_check(args) -> int:
         f"新公告 {len(fresh)} 条；原文需人工核验，确认后可用 disclose register 登记",
         file=sys.stderr,
     )
+    return 0
+
+
+def _save_pending(records, save_path: str) -> int:
+    """把新公告写成待核验清单 JSONL（供 watchlist/人工跟进复用）。"""
+    from .data.disclosures import record_to_dict
+
+    try:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        lines = [
+            json.dumps(record_to_dict(r), ensure_ascii=False) for r in records
+        ]
+        Path(save_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except (OSError, TypeError, ValueError) as exc:
+        print(f"写入待核验清单失败 {save_path}: {exc}", file=sys.stderr)
+        return 1
+    print(f"待核验清单已保存: {save_path}（{len(records)} 条）")
     return 0
 
 
@@ -690,6 +715,10 @@ def main(argv: list[str] | None = None) -> int:
         "--today", default=None,
         help="基准日期 YYYY-MM-DD（默认今天；用于可复现输出）",
     )
+    p_dcheck.add_argument(
+        "--save", metavar="PATH", default=None,
+        help="把新公告写成待核验清单 JSONL（覆盖写；人工核验后再用 register 登记）",
+    )
     p_dcheck.set_defaults(func=_cmd_disclose)
 
     p_watch = sub.add_parser(
@@ -707,6 +736,10 @@ def main(argv: list[str] | None = None) -> int:
     p_watch.add_argument(
         "--today", default=None,
         help="基准日期 YYYY-MM-DD（默认今天；用于可复现输出）",
+    )
+    p_watch.add_argument(
+        "--format", choices=["markdown", "json"], default="markdown",
+        help="输出格式（默认 markdown）",
     )
     p_watch.set_defaults(func=_cmd_watch)
 

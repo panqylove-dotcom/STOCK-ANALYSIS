@@ -34,6 +34,34 @@ def _parse_date(value: str) -> date | None:
         return None
 
 
+def ticker_freshness(
+    items: list[WatchItem],
+    *,
+    today: date,
+    stale_days: int,
+) -> dict[str, dict]:
+    """按标的计算分析新鲜度：最近分析日期、距今天数、是否超复盘周期。
+
+    只有「超期且仍有待观察条件」的标的 stale 才为 True。
+    """
+    out: dict[str, dict] = {}
+    by_ticker: dict[str, list[WatchItem]] = {}
+    for it in items:
+        by_ticker.setdefault(it.ticker, []).append(it)
+    for ticker, group in by_ticker.items():
+        dates = [d for d in (_parse_date(i.as_of) for i in group) if d]
+        latest = max(dates) if dates else None
+        age = (today - latest).days if latest else None
+        pending = [i for i in group if i.status == "待观察"]
+        out[ticker] = {
+            "latest_as_of": latest.isoformat() if latest else None,
+            "age_days": age,
+            "pending": len(pending),
+            "stale": age is not None and age > stale_days and bool(pending),
+        }
+    return out
+
+
 def collect_watch_items(
     reports: list[AnalysisReport],
     entries: list[ReviewEntry] | None = None,
@@ -117,3 +145,37 @@ def watch_markdown(
     lines.append("")
     lines.append("本清单为只读汇总，不构成投资建议；触发与否需人工核验原始数据。")
     return "\n".join(lines)
+
+
+def watch_json(
+    items: list[WatchItem],
+    *,
+    today: date,
+    stale_days: int = 90,
+) -> dict:
+    """生成观察清单的机器可读结构（watch --format json）。"""
+    fresh = ticker_freshness(items, today=today, stale_days=stale_days)
+    return {
+        "schema": "watchlist-v1",
+        "today": today.isoformat(),
+        "stale_days": stale_days,
+        "total": len(items),
+        "pending_total": sum(1 for i in items if i.status == "待观察"),
+        "stale_tickers": sorted(t for t, f in fresh.items() if f["stale"]),
+        "tickers": {
+            t: fresh[t] for t in sorted(fresh)
+        },
+        "items": [
+            {
+                "ticker": i.ticker,
+                "as_of": i.as_of,
+                "description": i.description,
+                "condition": i.condition,
+                "threshold": i.threshold,
+                "status": i.status,
+                "origin": i.origin,
+            }
+            for i in items
+        ],
+        "disclaimer": "只读汇总，不构成投资建议；触发与否需人工核验原始数据。",
+    }

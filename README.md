@@ -127,7 +127,7 @@ reports/YYYY-MM-DD-MARKET-TICKER.md
 - CLI 子命令：
   - `stock-analysis disclose list 600000 --source cninfo|sse|szse --start YYYY-MM-DD --end YYYY-MM-DD`（公告元数据检索）；
   - `stock-analysis disclose register 公告.pdf --ticker 600000 --title "..." --disclosed-on YYYY-MM-DD`（本地核验登记）；
-  - `stock-analysis disclose check 600000 --source cninfo|sse|szse [--index PATH] [--days 30] [--today YYYY-MM-DD]`（增量检查：以索引内该标的最新披露日期为基线列出新公告；索引无记录时回看最近 N 天。只读，新公告需人工核验后用 register 登记）；
+  - `stock-analysis disclose check 600000 --source cninfo|sse|szse [--index PATH] [--days 30] [--today YYYY-MM-DD] [--save pending.jsonl]`（增量检查：以索引内该标的最新披露日期为基线列出新公告；索引无记录时回看最近 N 天；`--save` 可把新公告覆盖写为待核验 JSONL 清单。新公告需人工核验后用 register 登记）；
 - 接口为 best-effort 适配：官方页面/接口可能变更；第三方与检索数据不能替代公告原文人工核验。
 
 用户增强功能（研究闭环补强）：
@@ -137,7 +137,7 @@ reports/YYYY-MM-DD-MARKET-TICKER.md
 - CLI 子命令：
   - `stock-analysis report <csv> --financials <path>`：用财务工作簿自动填充报告的财务趋势（币种不一致时拒绝并退出码 1）；
   - `stock-analysis report <csv> --observe "描述|触发判据|阈值"`（可多次）：随报告快照持久化观察条件；
-  - `stock-analysis watch <snapshot.json>... [--review-log log.json] [--stale-days 90] [--today YYYY-MM-DD]`：观察条件跟踪清单，长期未复盘的「待观察」项标注建议复盘；
+  - `stock-analysis watch <snapshot.json>... [--review-log log.json] [--stale-days 90] [--today YYYY-MM-DD] [--format markdown|json]`：观察条件跟踪清单，长期未复盘的「待观察」项标注建议复盘；`--format json` 输出机器可读结构（schema `watchlist-v1`，含每个标的最近分析日期、距今天数与 stale 标记）；
   - `stock-analysis review summary <log.json>`：复盘摘要（旧用法 `review <log.json>` 保持兼容）；
   - `stock-analysis review add <log.json> --ticker ... --review-date YYYY-MM-DD [--obs "描述|判据|阈值"] [--predicted X --actual X] [--thesis ...] [--note ...]`：追加一条复盘记录（日志不存在则创建）。
 

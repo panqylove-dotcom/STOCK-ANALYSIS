@@ -419,3 +419,51 @@ def test_cli_disclose_check_fetch_error_returns_1(monkeypatch, tmp_path, capsys)
     ])
     assert code == 1
     assert "披露增量检查失败" in capsys.readouterr().err
+
+
+def test_cli_disclose_check_save_pending_list(monkeypatch, tmp_path, capsys):
+    calls = []
+    monkeypatch.setattr(ds, "_default_http", _check_http(calls, [
+        _ann("新公告甲", 2026, 9, 1),
+        _ann("新公告乙", 2026, 9, 5),
+    ]))
+    out = tmp_path / "pending.jsonl"
+    code = cli_main([
+        "disclose", "check", "600000", "--source", "cninfo",
+        "--index", str(tmp_path / "absent.jsonl"), "--today", "2026-09-08",
+        "--save", str(out),
+    ])
+    assert code == 0
+    assert "待核验清单已保存" in capsys.readouterr().out
+    saved = ds.load_index(out)
+    assert [r.title for r in saved] == ["新公告甲", "新公告乙"]
+    assert all(r.ticker == "600000" for r in saved)
+
+
+def test_cli_disclose_check_save_empty_file(monkeypatch, tmp_path, capsys):
+    calls = []
+    monkeypatch.setattr(ds, "_default_http", _check_http(calls, []))
+    existing = tmp_path / "pending.jsonl"
+    existing.write_text("stale\n", encoding="utf-8")
+    code = cli_main([
+        "disclose", "check", "600000", "--source", "cninfo",
+        "--index", str(tmp_path / "absent.jsonl"), "--today", "2026-09-08",
+        "--save", str(existing),
+    ])
+    assert code == 0
+    assert existing.read_text(encoding="utf-8") == "\n"
+    assert "未发现新公告" in capsys.readouterr().out
+
+
+def test_cli_disclose_check_save_error_returns_1(monkeypatch, tmp_path, capsys):
+    calls = []
+    monkeypatch.setattr(ds, "_default_http", _check_http(calls, [
+        _ann("新公告甲", 2026, 9, 1),
+    ]))
+    code = cli_main([
+        "disclose", "check", "600000", "--source", "cninfo",
+        "--index", str(tmp_path / "absent.jsonl"), "--today", "2026-09-08",
+        "--save", str(tmp_path),
+    ])
+    assert code == 1
+    assert "写入待核验清单失败" in capsys.readouterr().err
