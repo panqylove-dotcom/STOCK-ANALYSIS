@@ -488,7 +488,21 @@ def _disclose_check(args) -> int:
     except ValueError:
         print(f"日期格式错误: {args.today}（应为 YYYY-MM-DD）", file=sys.stderr)
         return 1
-    if known:
+    try:
+        since = date.fromisoformat(args.since) if args.since else None
+    except ValueError:
+        print(f"--since 日期格式错误: {args.since}（应为 YYYY-MM-DD）", file=sys.stderr)
+        return 1
+    if since is not None:
+        if since > today:
+            print(f"--since 不能晚于基准日期: {since} > {today}", file=sys.stderr)
+            return 1
+        start = since
+        print(
+            f"基线: 手动指定 {start}（索引内已登记 {len(known)} 条，仍会去重）",
+            file=sys.stderr,
+        )
+    elif known:
         start = max(r.disclosed_on for r in known)
         print(
             f"基线: 索引内 {args.ticker} 最新披露 {start}（已登记 {len(known)} 条）",
@@ -710,6 +724,10 @@ def main(argv: list[str] | None = None) -> int:
     p_dcheck.add_argument(
         "--days", type=int, default=30,
         help="索引无该标的记录时的回看天数（默认 30）",
+    )
+    p_dcheck.add_argument(
+        "--since", default=None,
+        help="手动指定检索基线日期 YYYY-MM-DD（优先于索引基线与回看天数；仍按索引去重）",
     )
     p_dcheck.add_argument(
         "--today", default=None,

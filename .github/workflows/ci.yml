@@ -8,6 +8,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
@@ -29,4 +31,38 @@ jobs:
           name: coverage-xml
           path: coverage.xml
           if-no-files-found: error
+      - name: Update coverage badge
+        if: matrix.python-version == '3.12' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          python - <<'PY'
+          import json
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse("coverage.xml").getroot()
+          pct = round(float(root.get("line-rate")) * 100)
+          color = (
+              "green" if pct >= 90
+              else "yellowgreen" if pct >= 75
+              else "orange" if pct >= 50
+              else "red"
+          )
+          with open("coverage.json", "w", encoding="utf-8") as f:
+              json.dump(
+                  {
+                      "schemaVersion": 1,
+                      "label": "coverage",
+                      "message": f"{pct}%",
+                      "color": color,
+                  },
+                  f,
+              )
+              f.write("\n")
+          PY
+          git diff --quiet coverage.json || {
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add coverage.json
+            git commit -m "ci: update coverage badge [skip ci]"
+            git push
+          }
 

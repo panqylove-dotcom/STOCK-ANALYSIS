@@ -467,3 +467,47 @@ def test_cli_disclose_check_save_error_returns_1(monkeypatch, tmp_path, capsys):
     ])
     assert code == 1
     assert "写入待核验清单失败" in capsys.readouterr().err
+
+
+def test_cli_disclose_check_since_overrides_baseline(monkeypatch, tmp_path, capsys):
+    idx = _write_index(tmp_path, [
+        json.dumps({
+            "ticker": "600000", "source": "local", "title": "已登记公告",
+            "disclosed_on": "2026-08-01", "accessed_at": "2026-08-01T00:00:00+08:00",
+        }, ensure_ascii=False),
+    ])
+    calls = []
+    monkeypatch.setattr(ds, "_default_http", _check_http(calls, [
+        _ann("已登记公告", 2026, 8, 1),   # 索引已有 -> 应被去重
+        _ann("七月旧公告", 2026, 7, 15),  # --since 扩大窗口后应可见
+    ]))
+    code = cli_main([
+        "disclose", "check", "600000", "--source", "cninfo",
+        "--index", str(idx), "--today", "2026-09-08", "--since", "2026-07-01",
+    ])
+    assert code == 0
+    captured = capsys.readouterr()
+    assert "手动指定" in captured.err
+    assert "七月旧公告" in captured.out
+    assert "已登记公告" not in captured.out
+    assert calls[1][1]["form"]["seDate"].startswith("2026-07-01~")
+
+
+def test_cli_disclose_check_bad_since_returns_1(tmp_path, capsys):
+    code = cli_main([
+        "disclose", "check", "600000", "--source", "cninfo",
+        "--index", str(tmp_path / "absent.jsonl"),
+        "--today", "2026-09-08", "--since", "not-a-date",
+    ])
+    assert code == 1
+    assert "--since 日期格式错误" in capsys.readouterr().err
+
+
+def test_cli_disclose_check_since_after_today_returns_1(tmp_path, capsys):
+    code = cli_main([
+        "disclose", "check", "600000", "--source", "cninfo",
+        "--index", str(tmp_path / "absent.jsonl"),
+        "--today", "2026-09-08", "--since", "2026-10-01",
+    ])
+    assert code == 1
+    assert "不能晚于基准日期" in capsys.readouterr().err

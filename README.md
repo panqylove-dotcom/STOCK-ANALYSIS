@@ -1,5 +1,7 @@
 # STOCK-ANALYSIS
 
+![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/panqylove-dotcom/STOCK-ANALYSIS/main/coverage.json)
+
 一个面向个人投资研究的、可复核的股票分析文档框架。
 
 本仓库当前采用 **documentation-first（文档先行）** 方式建设：先统一研究流程、指标口径、风险规则和报告模板，再逐步接入行情、财务数据与自动化分析代码。仓库不提供自动交易服务，也不构成投资建议。
@@ -127,7 +129,7 @@ reports/YYYY-MM-DD-MARKET-TICKER.md
 - CLI 子命令：
   - `stock-analysis disclose list 600000 --source cninfo|sse|szse --start YYYY-MM-DD --end YYYY-MM-DD`（公告元数据检索）；
   - `stock-analysis disclose register 公告.pdf --ticker 600000 --title "..." --disclosed-on YYYY-MM-DD`（本地核验登记）；
-  - `stock-analysis disclose check 600000 --source cninfo|sse|szse [--index PATH] [--days 30] [--today YYYY-MM-DD] [--save pending.jsonl]`（增量检查：以索引内该标的最新披露日期为基线列出新公告；索引无记录时回看最近 N 天；`--save` 可把新公告覆盖写为待核验 JSONL 清单。新公告需人工核验后用 register 登记）；
+  - `stock-analysis disclose check 600000 --source cninfo|sse|szse [--index PATH] [--since YYYY-MM-DD] [--days 30] [--today YYYY-MM-DD] [--save pending.jsonl]`（增量检查：以索引内该标的最新披露日期为基线列出新公告；`--since` 可手动指定基线日期覆盖索引基线（仍按索引去重）；索引无记录时回看最近 N 天；`--save` 可把新公告覆盖写为待核验 JSONL 清单。新公告需人工核验后用 register 登记）；
 - 接口为 best-effort 适配：官方页面/接口可能变更；第三方与检索数据不能替代公告原文人工核验。
 
 用户增强功能（研究闭环补强）：
